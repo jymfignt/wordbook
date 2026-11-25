@@ -41,9 +41,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 header{display:flex;align-items:center;gap:10px;padding:14px 0 10px;position:sticky;top:0;z-index:6;
   background:linear-gradient(#0b0e17ee,#0b0e1700);backdrop-filter:blur(8px)}
 .brand{font-weight:700;font-size:16px;white-space:nowrap}
-.timers{display:flex;gap:12px;font-size:13px;color:#9aa5bd;margin-left:auto;font-variant-numeric:tabular-nums}
+.timers{display:flex;gap:12px;font-size:13px;color:#9aa5bd;margin-left:auto;font-variant-numeric:tabular-nums;
+  align-items:center}
 .timers b{color:#e8ecf5;font-weight:600}
 .timers .dim{opacity:.65}
+.dot{width:8px;height:8px;border-radius:50%;background:#4b5568;display:inline-block;transition:.3s;flex:none}
+.dot.active{background:#22c55e;box-shadow:0 0 8px #22c55e88}
+.dot.paused{background:#f59e0b}
 .hbtns{display:flex;gap:6px}
 .chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#e8ecf5;
   border-radius:10px;padding:7px 11px;font-size:13px;cursor:pointer}
@@ -183,6 +187,7 @@ button{font-family:inherit}
   <header>
     <div class="brand">📚 单词本</div>
     <div class="timers">
+      <span id="studyDot" class="dot" title="未开始学习（点卡片或显示释义后开始计时）"></span>
       <span title="今日学习时长">⏱ <b id="tToday">0:00</b></span>
       <span class="dim" title="累计学习时长">总 <b id="tTotal">0:00</b></span>
     </div>
@@ -639,18 +644,46 @@ function enterApp(source){
   applyBg();
   renderAll();
   startTimer();
+  updateStudyDot();
   if (source === 'gist') toast('已从云端同步最新数据');
 }
 
 /* =========================================================
-   计时器
+   计时器：只在学习页且开始学习后才计时
 ========================================================= */
 let timerStarted = false, tickCount = 0;
+let currentTab = 'study';
+let studyActive = false;
+
+function updateStudyDot(){
+  const dot = $('#studyDot');
+  if (!dot) return;
+  if (!studyActive){
+    dot.className = 'dot';
+    dot.title = '未开始学习（点卡片或显示释义后开始计时）';
+  } else if (currentTab === 'study' && !document.hidden){
+    dot.className = 'dot active';
+    dot.title = '正在计时';
+  } else {
+    dot.className = 'dot paused';
+    dot.title = '已暂停（离开学习页或页面不可见）';
+  }
+}
+
+function markStudyActive(){
+  if (!studyActive){
+    studyActive = true;
+    updateStudyDot();
+    renderTimer();
+  }
+}
+
 function startTimer(){
   if (timerStarted) return;
   timerStarted = true;
   setInterval(() => {
     if (document.hidden || !cryptoKey || !state) return;
+    if (currentTab !== 'study' || !studyActive || !state.words.length) return;
     const d = todayKey();
     const day = state.daily[d] || (state.daily[d] = { sec:0, n:0, ok:0, bad:0, meh:0 });
     day.sec = (day.sec || 0) + 1;
@@ -658,7 +691,6 @@ function startTimer(){
     if (++tickCount % 15 === 0){ scheduleSave(); if (!$('#tab-stats').hidden) renderStats(); }
   }, 1000);
 }
-
 function renderTimer(){
   if (!state) return;
   const d = todayKey();
@@ -728,6 +760,8 @@ function renderStudy(){
 
 function grade(g){
   if (!cur) return;
+  markStudyActive();
+
   const now = Date.now(), id = cur.id, d = todayKey();
   const p = state.prog[id] || (state.prog[id] = { n:0, ok:0, bad:0, box:0, due:0, last:0 });
   const day = state.daily[d] || (state.daily[d] = { sec:0, n:0, ok:0, bad:0, meh:0 });
@@ -999,6 +1033,7 @@ function renderAll(){
   renderWrong();
   renderSettings();
   renderPlaylistList();
+  updateStudyDot();
 }
 
 /* =========================================================
@@ -1007,6 +1042,8 @@ function renderAll(){
 function bindEvents(){
   $$('.tabs button').forEach(b => {
     b.onclick = () => {
+      currentTab = b.dataset.tab;
+      updateStudyDot();
       $$('.tabs button').forEach(x => x.classList.toggle('on', x === b));
       ['study','stats','wrong','settings'].forEach(t => {
         $('#tab-' + t).hidden = (t !== b.dataset.tab);
@@ -1017,9 +1054,19 @@ function bindEvents(){
     };
   });
 
-  // 学习
-  $('#btnReveal').onclick = () => { revealed = true; renderStudy(); };
-  $('#card').onclick = () => { if (!revealed && state.words.length){ revealed = true; renderStudy(); } };
+  // 学习：点“显示释义”、点卡片、按空格都视为开始学习
+  $('#btnReveal').onclick = () => {
+    markStudyActive();
+    revealed = true;
+    renderStudy();
+  };
+  $('#card').onclick = () => {
+    if (!revealed && state.words.length){
+      markStudyActive();
+      revealed = true;
+      renderStudy();
+    }
+  };
   $$('#gradeRow button').forEach(b => b.onclick = () => grade(+b.dataset.g));
 
   document.addEventListener('keydown', e => {
@@ -1028,7 +1075,11 @@ function bindEvents(){
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (e.code === 'Space'){
       e.preventDefault();
-      if (!revealed && state.words.length){ revealed = true; renderStudy(); }
+      if (!revealed && state.words.length){
+        markStudyActive();
+        revealed = true;
+        renderStudy();
+      }
     }
     if (revealed && ['1','2','3'].includes(e.key)) grade(+e.key - 1);
   });
@@ -1111,6 +1162,8 @@ function bindEvents(){
     }
     await saveNow();
     cur = null; revealed = false;
+    // 导入后需要重新点一下才开始计时
+    studyActive = false;
     renderAll();
     toast(`导入完成：新增 ${added} 个，共 ${arr.length} 条解析结果`);
   };
@@ -1218,10 +1271,11 @@ function bindEvents(){
     location.reload();
   };
 
-  // 切回页面时刷新
+  // 切回页面时刷新计时状态
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && state){
+    if (state){
       renderTimer();
+      updateStudyDot();
       if (!$('#tab-stats').hidden) renderStats();
     }
   });
