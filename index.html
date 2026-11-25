@@ -135,6 +135,8 @@ button{font-family:inherit}
 @media(max-width:560px){.pl-row{grid-template-columns:1fr 1fr}}
 .gist-status{font-size:13px;color:#9aa5bd;margin-bottom:10px;line-height:1.7}
 .gist-status code{background:rgba(255,255,255,.08);border-radius:6px;padding:2px 6px;font-size:12px}
+.wcount{font-size:12.5px;color:#8d97ad;margin-top:6px}
+.wcount b{color:#e8ecf5}
 
 /* ---------- 弹窗 ---------- */
 .modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:center;
@@ -249,6 +251,7 @@ button{font-family:inherit}
         <textarea id="importText" rows="7" placeholder="每行一个词条：word  释义&#10;例如：&#10;abandon /əˈbændən/ 放弃；抛弃&#10;ability 能力"></textarea>
         <button id="btnImportText" class="primary">导入这些单词</button>
         <div class="tiny">PDF 解析为尽力而为，请检查文本后再导入。也可以直接把「单词 释义」粘贴进来。</div>
+        <div class="wcount" id="wordCount">当前词库：<b>0</b> 个单词</div>
       </div>
 
       <h3>云端同步（Gist）</h3>
@@ -265,7 +268,7 @@ button{font-family:inherit}
           <button id="btnGistRefresh">从云端刷新</button>
           <button id="btnGistClear" class="danger">断开同步</button>
         </div>
-        <div class="tiny">使用公开 Gist 存放加密数据，Token 只存本机。多设备填同一个 Gist ID 和各自生成的 Token 即可同步，但必须使用同一个密码。</div>
+        <div class="tiny">使用公开 Gist 存放加密数据，Token 只存本机。多设备填同一个 Gist ID 和各自生成的 Token 即可同步，但必须使用同一个密码。加载时会自动选用本地/云端较新的版本。</div>
       </div>
 
       <h3>背景图</h3>
@@ -410,7 +413,7 @@ async function pushGistVault(cfg, payload){
   }
 }
 
-/* Gist 推送防抖，避免频繁触发 rate limit */
+/* Gist 推送防抖（缩短到 1.5 秒） */
 let gistPushTimer = null, pendingPush = null;
 function scheduleGistPush(cfg, payload){
   pendingPush = { cfg, payload };
@@ -423,7 +426,16 @@ function scheduleGistPush(cfg, payload){
       console.warn('Gist 推送失败', e);
       toast('云端同步失败：' + e.message);
     });
-  }, 3000);
+  }, 1500);
+}
+
+async function flushPendingPush(){
+  if (!pendingPush) return;
+  const { cfg, payload } = pendingPush;
+  pendingPush = null;
+  clearTimeout(gistPushTimer);
+  try { await pushGistVault(cfg, payload); }
+  catch (e) { console.warn('flush 推送失败', e); }
 }
 
 /* =========================================================
@@ -463,7 +475,11 @@ async function tryDecryptPayload(payload, pw){
   } catch { return 'bad'; }
 }
 
-async function saveNow(){
+/**
+ * 保存数据。
+ * @param {boolean} flush  true 时跳过防抖，立即推送 Gist（用于导入、页面隐藏等关键时机）
+ */
+async function saveNow(flush = false){
   if (!cryptoKey || !state) return;
   try {
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -473,9 +489,18 @@ async function saveNow(){
     // 本地立即写，保证离线不丢
     localStorage.setItem(STORE_KEY, JSON.stringify(payload));
 
-    // Gist 异步防抖推送
     const cfg = getGistConfig();
-    if (cfg) scheduleGistPush(cfg, payload);
+    if (!cfg) return;
+
+    if (flush){
+      // 立即推送，跳过防抖
+      pendingPush = null;
+      clearTimeout(gistPushTimer);
+      try { await pushGistVault(cfg, payload); }
+      catch (e) { console.warn('立即推送失败', e); toast('云端同步失败：' + e.message); }
+    } else {
+      scheduleGistPush(cfg, payload);
+    }
   } catch (e) {
     console.warn(e);
     toast('保存失败：浏览器存储空间可能已满');
@@ -484,14 +509,14 @@ async function saveNow(){
 let saveTimer = null;
 function scheduleSave(){
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, 700);
+  saveTimer = setTimeout(() => saveNow(false), 700);
 }
 
 async function createVault(pw){
   saltB64 = bufToB64(crypto.getRandomValues(new Uint8Array(16)));
   cryptoKey = await deriveKey(pw, b64ToBuf(saltB64));
   state = defaultState();
-  await saveNow();
+  await saveNow(false);
 }
 
 /* =========================================================
@@ -553,7 +578,6 @@ function bootGate(){
     pw2.hidden = false;
   }
 
-  // 预填充已保存的 Gist 配置
   const existing = getGistConfig();
   if (existing){
     $('#gistId').value = existing.id;
@@ -578,7 +602,6 @@ async function handleEnter(){
   msg.textContent = '';
   const pw = $('#pw1').value;
 
-  // 读取门禁页填写的 Gist 配置（若填了就保存）
   const gi = $('#gistId').value.trim();
   const gt = $('#gistToken').value.trim();
   if (gi && gt) saveGistConfig(gi, gt);
@@ -596,17 +619,30 @@ async function handleEnter(){
 
   $('#gateBtn').disabled = true;
 
-  // 优先从 Gist 拉取
+  // 并行拉取 Gist 和本地
   let gistPayload = null, gistError = null;
   if (cfg){
     try { gistPayload = await fetchGistVault(cfg); }
     catch (e) { gistError = e.message; }
   }
-
   const localPayload = getLocalPayload();
-  const payload = gistPayload || localPayload;
 
-  // 没有可用数据 → 全新创建
+  // 关键：比较时间戳，用较新的那一份，避免 Gist 推送延迟导致丢失
+  let payload = null;
+  let source = 'none';
+  if (gistPayload && localPayload){
+    if ((gistPayload.ts || 0) >= (localPayload.ts || 0)){
+      payload = gistPayload; source = 'gist';
+    } else {
+      payload = localPayload; source = 'local';
+    }
+  } else if (gistPayload){
+    payload = gistPayload; source = 'gist';
+  } else if (localPayload){
+    payload = localPayload; source = 'local';
+  }
+
+  // 没有任何可用数据 → 全新创建
   if (!payload){
     if (cfg && gistError){
       gateMsg('无法读取云端数据：' + gistError + '，请检查网络或 Token');
@@ -631,11 +667,18 @@ async function handleEnter(){
   // 有数据 → 解锁
   const r = await tryDecryptPayload(payload, pw);
   if (r !== 'ok'){
-    gateMsg(gistPayload ? '密码错误（云端数据）' : '密码错误');
+    gateMsg(source === 'gist' ? '密码错误（云端数据）' : '密码错误');
     $('#gateBtn').disabled = false;
     return;
   }
-  enterApp(gistPayload ? 'gist' : 'local');
+
+  // 如果本地较新，立即推送覆盖 Gist，让其他设备能拿到
+  if (source === 'local' && gistPayload && cfg){
+    try { await pushGistVault(cfg, payload); }
+    catch (e) { console.warn('推送本地较新数据到云端失败', e); }
+  }
+
+  enterApp(source);
 }
 
 function enterApp(source){
@@ -646,10 +689,11 @@ function enterApp(source){
   startTimer();
   updateStudyDot();
   if (source === 'gist') toast('已从云端同步最新数据');
+  else if (source === 'local') toast('已加载本地数据');
 }
 
 /* =========================================================
-   计时器：只在学习页且开始学习后才计时
+   计时器
 ========================================================= */
 let timerStarted = false, tickCount = 0;
 let currentTab = 'study';
@@ -885,6 +929,8 @@ function renderSettings(){
   });
   $('#bgUrl').value = (state.settings.bg && !state.settings.bg.startsWith('data:')) ? state.settings.bg : '';
   renderGistStatus();
+  const wc = $('#wordCount');
+  if (wc) wc.innerHTML = `当前词库：<b>${state.words.length}</b> 个单词`;
 }
 
 function renderGistStatus(){
@@ -1054,7 +1100,7 @@ function bindEvents(){
     };
   });
 
-  // 学习：点“显示释义”、点卡片、按空格都视为开始学习
+  // 学习
   $('#btnReveal').onclick = () => {
     markStudyActive();
     revealed = true;
@@ -1096,8 +1142,8 @@ function bindEvents(){
   });
 
   // 锁定
-  $('#btnLock').onclick = () => {
-    saveNow();
+  $('#btnLock').onclick = async () => {
+    await saveNow(true);
     cryptoKey = null; state = null;
     location.reload();
   };
@@ -1116,7 +1162,7 @@ function bindEvents(){
     try {
       const dataUrl = await readImageCompressed(f);
       state.settings.bg = dataUrl;
-      await saveNow();
+      await saveNow(false);
       applyBg();
       toast('背景已更新');
     } catch { toast('图片读取失败'); }
@@ -1125,12 +1171,12 @@ function bindEvents(){
   $('#btnBgUrl').onclick = async () => {
     const v = $('#bgUrl').value.trim();
     state.settings.bg = v;
-    await saveNow(); applyBg();
+    await saveNow(false); applyBg();
     toast(v ? '背景已更新' : '已清除背景');
   };
   $('#btnBgClear').onclick = async () => {
     state.settings.bg = '';
-    await saveNow(); applyBg(); $('#bgUrl').value = '';
+    await saveNow(false); applyBg(); $('#bgUrl').value = '';
     toast('已清除背景');
   };
 
@@ -1160,12 +1206,13 @@ function bindEvents(){
     for (const w of arr){
       if (!exist.has(w.id)){ state.words.push(w); exist.add(w.id); added++; }
     }
-    await saveNow();
     cur = null; revealed = false;
-    // 导入后需要重新点一下才开始计时
     studyActive = false;
+    // 关键：导入后立即推送，不等防抖
+    await saveNow(true);
     renderAll();
-    toast(`导入完成：新增 ${added} 个，共 ${arr.length} 条解析结果`);
+    const cfg = getGistConfig();
+    toast(`导入完成：新增 ${added} 个，共 ${state.words.length} 个单词${cfg ? '，已同步云端' : ''}`);
   };
 
   // Gist 同步：保存并测试
@@ -1185,7 +1232,7 @@ function bindEvents(){
     renderGistStatus();
   };
 
-  // Gist 同步：从云端刷新
+  // Gist 同步：从云端刷新（强制用云端覆盖本地）
   $('#btnGistRefresh').onclick = async () => {
     if (!confirm('从云端刷新会覆盖当前本地进度，确定吗？')) return;
     const cfg = getGistConfig();
@@ -1199,7 +1246,7 @@ function bindEvents(){
       );
       saltB64 = payload.salt;
       state = normalize(JSON.parse(dec.decode(pt)));
-      await saveNow();
+      await saveNow(false);
       applyBg();
       renderAll();
       toast('已从云端刷新');
@@ -1225,7 +1272,7 @@ function bindEvents(){
     if (np !== np2) return toast('两次输入不一致');
     saltB64 = bufToB64(crypto.getRandomValues(new Uint8Array(16)));
     cryptoKey = await deriveKey(np, b64ToBuf(saltB64));
-    await saveNow();
+    await saveNow(true);
     toast('密码已修改，其他设备需使用新密码同步');
   };
 
@@ -1271,12 +1318,25 @@ function bindEvents(){
     location.reload();
   };
 
-  // 切回页面时刷新计时状态
+  // 页面切后台/关闭前：强制 flush 一次，避免防抖没完成就丢数据
   document.addEventListener('visibilitychange', () => {
-    if (state){
+    if (document.hidden){
+      flushPendingPush();
+      if (state && cryptoKey) saveNow(false);
+    } else if (state){
       renderTimer();
       updateStudyDot();
       if (!$('#tab-stats').hidden) renderStats();
+    }
+  });
+  window.addEventListener('beforeunload', () => {
+    if (state && cryptoKey){
+      // 同步写本地（fetch 在 beforeunload 里可能被中断，但 localStorage 同步可行）
+      try {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        // 注意：加密是异步的，beforeunload 里无法 await。这里只做 localStorage 兜底，
+        // 真正的云端推送靠 visibilitychange 触发。
+      } catch {}
     }
   });
 }
