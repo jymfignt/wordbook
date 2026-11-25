@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#0b0e17">
+<title>趣味背单词</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+     color:#e8ecf5;background:#0b0e17;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+#bgLayer{position:fixed;inset:0;z-index:0;background:#0b0e17 center/cover no-repeat;transition:background-image .4s}
+#bgLayer::after{content:"";position:absolute;inset:0;background:rgba(8,10,20,.62)}
+#gate,#app{position:relative;z-index:1}
+
+/* ---------- 门禁 ---------- */
+#gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-box{width:100%;max-width:380px;background:rgba(22,26,40,.88);border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;padding:26px 22px;backdrop-filter:blur(14px);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.gate-box h1{font-size:20px;margin:0 0 6px;text-align:center}
+.gate-box p{font-size:13px;color:#98a2b8;text-align:center;margin:0 0 18px;line-height:1.6}
+.gate-box input{width:100%;padding:12px 14px;margin-bottom:10px;border-radius:11px;border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);color:#fff;font-size:15px;outline:none}
+.gate-box input:focus{border-color:#5b8cff}
+.gate-box button{width:100%;padding:12px;border-radius:11px;border:0;font-size:15px;font-weight:600;cursor:pointer;
+  background:linear-gradient(135deg,#5b8cff,#7b5bff);color:#fff}
+.gate-box button:disabled{opacity:.55;cursor:not-allowed}
+.msg{color:#ff7a7a;font-size:13px;text-align:center;min-height:18px;margin-top:8px}
+.tiny{font-size:11.5px;color:#7b859b;line-height:1.6;margin-top:14px}
+.gist-toggle{background:rgba(255,255,255,.07)!important;border:1px solid rgba(255,255,255,.1)!important;
+  color:#b9c2d6!important;font-size:13px!important;font-weight:500!important;margin-top:2px}
+.gist-panel{margin-top:4px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.07)}
+.gist-panel input{font-size:13px!important;padding:10px 12px!important}
+.gist-tip{font-size:11px;color:#7b859b;line-height:1.6;margin-top:2px}
+
+/* ---------- 顶栏 ---------- */
+#app{max-width:880px;margin:0 auto;padding:0 14px 60px}
+header{display:flex;align-items:center;gap:10px;padding:14px 0 10px;position:sticky;top:0;z-index:6;
+  background:linear-gradient(#0b0e17ee,#0b0e1700);backdrop-filter:blur(8px)}
+.brand{font-weight:700;font-size:16px;white-space:nowrap}
+.timers{display:flex;gap:12px;font-size:13px;color:#9aa5bd;margin-left:auto;font-variant-numeric:tabular-nums}
+.timers b{color:#e8ecf5;font-weight:600}
+.timers .dim{opacity:.65}
+.hbtns{display:flex;gap:6px}
+.chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#e8ecf5;
+  border-radius:10px;padding:7px 11px;font-size:13px;cursor:pointer}
+.chip:active{transform:scale(.96)}
+
+/* ---------- 标签 ---------- */
+.tabs{display:flex;gap:6px;margin:6px 0 16px;background:rgba(255,255,255,.05);padding:5px;border-radius:13px}
+.tabs button{flex:1;padding:9px 0;border:0;border-radius:9px;background:transparent;color:#9aa5bd;
+  font-size:13.5px;cursor:pointer;transition:.2s}
+.tabs button.on{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+
+/* ---------- 学习 ---------- */
+.goal{margin-bottom:14px}
+.goal-top{display:flex;justify-content:space-between;font-size:12.5px;color:#9aa5bd;margin-bottom:6px}
+.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#5b8cff,#38e0c0);
+  transition:width .4s ease}
+.flashcard{background:rgba(255,255,255,.96);color:#1b1e2b;border-radius:22px;padding:44px 24px;min-height:250px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);transition:.2s}
+.flashcard.flash-ok{box-shadow:0 0 0 4px #22c55e,0 18px 50px rgba(0,0,0,.45)}
+.flashcard.flash-bad{box-shadow:0 0 0 4px #ef4444,0 18px 50px rgba(0,0,0,.45)}
+.flashcard.flash-mid{box-shadow:0 0 0 4px #f59e0b,0 18px 50px rgba(0,0,0,.45)}
+.flashcard .word{font-size:38px;font-weight:700;letter-spacing:.5px;word-break:break-word;line-height:1.2}
+.flashcard .phon{color:#7c86a0;font-size:15px;margin-top:8px;font-family:ui-monospace,Menlo,monospace}
+.flashcard .meaning{margin-top:20px;font-size:18px;line-height:1.6;color:#2b3247;max-width:560px}
+.flashcard .meaning.blur{color:#b6bdcf;font-size:14px;margin-top:24px}
+.flashcard .combo{font-size:13px;color:#ef8a3c;font-weight:600;height:18px}
+.flashcard .empty{font-size:15px;color:#6b7590;line-height:1.9}
+.acts{margin-top:18px}
+.big{width:100%;padding:15px;border-radius:15px;border:0;font-size:15.5px;font-weight:600;cursor:pointer;
+  background:linear-gradient(135deg,#5b8cff,#7b5bff);color:#fff;box-shadow:0 10px 26px rgba(91,140,255,.32)}
+.grade{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.grade button{padding:15px 4px;border-radius:15px;border:0;font-size:14.5px;font-weight:600;cursor:pointer;color:#fff}
+.grade .bad{background:#ef4444}.grade .mid{background:#f59e0b}.grade .good{background:#22c55e}
+.grade small{display:block;font-weight:400;opacity:.7;font-size:11px;margin-top:2px}
+.grade button:active,.big:active{transform:scale(.97)}
+
+/* ---------- 统计 ---------- */
+h3{font-size:14px;color:#9aa5bd;font-weight:600;margin:24px 0 10px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);border-radius:15px;
+  padding:16px 8px;text-align:center}
+.stat b{display:block;font-size:19px;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11.5px;color:#8d97ad}
+.chart{display:flex;align-items:flex-end;gap:8px;height:130px;padding:12px;border-radius:15px;
+  background:rgba(255,255,255,.05)}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart .col i{display:block;width:100%;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,#5b8cff,#3a5fd0);
+  min-height:3px;transition:height .4s}
+.chart .col span{font-size:10.5px;color:#8d97ad}
+.chart .col em{font-size:10px;color:#66718a;font-style:normal}
+
+/* ---------- 错题本 ---------- */
+.wrow{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border-radius:13px;
+  padding:12px 14px;margin-bottom:8px}
+.winfo{flex:1;min-width:0}
+.winfo b{font-size:16px;display:block}
+.winfo span{font-size:12.5px;color:#98a2b8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.wops{display:flex;align-items:center;gap:10px}
+.wops em{color:#ef4444;font-style:normal;font-size:13px;font-weight:600}
+.wops button{background:rgba(255,255,255,.1);border:0;color:#cfd6e6;border-radius:9px;padding:6px 10px;
+  font-size:12.5px;cursor:pointer}
+.empty{text-align:center;color:#6b7590;padding:36px 0;font-size:14px;line-height:1.9}
+
+/* ---------- 设置 ---------- */
+.box{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);border-radius:15px;padding:14px;margin-bottom:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+input[type=text],input[type=password],input[type=file],textarea{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  color:#e8ecf5;border-radius:10px;padding:10px 12px;font-size:13.5px;outline:none;font-family:inherit}
+input[type=text],input[type=password]{flex:1;min-width:150px}
+textarea{width:100%;resize:vertical;line-height:1.7;font-size:13px}
+input[type=file]{flex:1;min-width:160px;font-size:12.5px;padding:8px}
+button{font-family:inherit}
+.box button,.row button{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1);color:#e8ecf5;
+  border-radius:10px;padding:9px 14px;font-size:13px;cursor:pointer}
+.box button.primary{background:linear-gradient(135deg,#5b8cff,#7b5bff);border:0;font-weight:600;width:100%;
+  padding:11px;margin-top:6px}
+.box button.danger{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.35);color:#ff9a9a}
+.pl-row{display:grid;grid-template-columns:1fr 1.4fr 1.1fr auto;gap:6px;margin-bottom:8px}
+.pl-row input{min-width:0;font-size:12.5px;padding:8px 10px}
+.pl-row button{background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.3);color:#ff9a9a;
+  border-radius:9px;padding:0 10px;font-size:12px;cursor:pointer}
+@media(max-width:560px){.pl-row{grid-template-columns:1fr 1fr}}
+.gist-status{font-size:13px;color:#9aa5bd;margin-bottom:10px;line-height:1.7}
+.gist-status code{background:rgba(255,255,255,.08);border-radius:6px;padding:2px 6px;font-size:12px}
+
+/* ---------- 弹窗 ---------- */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:center;
+  justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal-box{width:100%;max-width:440px;background:#151a28;border:1px solid rgba(255,255,255,.1);
+  border-radius:18px;padding:20px;max-height:86vh;overflow:auto}
+.modal-box h3{margin:0 0 14px;color:#e8ecf5;font-size:16px}
+.pl-item{width:100%;display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);color:#e8ecf5;border-radius:12px;padding:13px 15px;margin-bottom:8px;
+  font-size:14px;cursor:pointer;text-align:left}
+.pl-item small{color:#8d97ad;font-size:11.5px}
+.pl-item:active{transform:scale(.985)}
+#miniPlayer{margin:12px 0;border-radius:12px;overflow:hidden;background:#000}
+#biliFrame{width:100%;height:190px;border:0;display:block}
+.close{width:100%;padding:12px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#e8ecf5;
+  font-size:14px;cursor:pointer;margin-top:6px}
+
+#toast{position:fixed;left:50%;bottom:36px;transform:translate(-50%,20px);background:rgba(30,36,54,.96);
+  border:1px solid rgba(255,255,255,.12);color:#e8ecf5;padding:11px 20px;border-radius:12px;font-size:13.5px;
+  opacity:0;pointer-events:none;transition:.28s;z-index:99;max-width:88vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div id="bgLayer"></div>
+
+<!-- ================= 密码门 ================= -->
+<div id="gate">
+  <div class="gate-box">
+    <h1>🔐 我的单词本</h1>
+    <p id="gateHint"></p>
+    <input id="pw1" type="password" placeholder="密码" autocomplete="current-password">
+    <input id="pw2" type="password" placeholder="再次输入密码" autocomplete="new-password" hidden>
+
+    <button id="gistToggle" class="gist-toggle" type="button">☁️ 云端同步（可选）</button>
+    <div id="gistPanel" class="gist-panel" hidden>
+      <input id="gistId" type="text" placeholder="Gist ID（公开 Gist 的 URL 末段）" autocomplete="off">
+      <input id="gistToken" type="password" placeholder="GitHub Token（仅 gist 权限）" autocomplete="off">
+      <div class="gist-tip">Token 只保存在本机浏览器；数据加密后再上传，Gist 内容为密文。多设备请使用同一个密码。</div>
+    </div>
+
+    <button id="gateBtn" style="margin-top:10px">进入</button>
+    <div id="gateMsg" class="msg"></div>
+    <div class="tiny">所有数据使用 AES-GCM 加密。密码不会被存储，忘记无法找回。</div>
+  </div>
+</div>
+
+<!-- ================= 主界面 ================= -->
+<div id="app" hidden>
+  <header>
+    <div class="brand">📚 单词本</div>
+    <div class="timers">
+      <span title="今日学习时长">⏱ <b id="tToday">0:00</b></span>
+      <span class="dim" title="累计学习时长">总 <b id="tTotal">0:00</b></span>
+    </div>
+    <div class="hbtns">
+      <button id="btnMusic" class="chip">🎵 音乐</button>
+      <button id="btnLock" class="chip" title="锁定">🔒</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="study" class="on">学习</button>
+    <button data-tab="stats">统计</button>
+    <button data-tab="wrong">错题本</button>
+    <button data-tab="settings">设置</button>
+  </nav>
+
+  <main>
+    <section id="tab-study" class="panel">
+      <div class="goal">
+        <div class="goal-top"><span>今日目标</span><span id="goalText">0 / 30</span></div>
+        <div class="bar"><i id="goalBar"></i></div>
+      </div>
+      <div class="flashcard" id="card"></div>
+      <div class="acts">
+        <button id="btnReveal" class="big">显示释义（空格）</button>
+        <div class="grade" id="gradeRow" hidden>
+          <button data-g="0" class="bad">不认识<small>1</small></button>
+          <button data-g="1" class="mid">模糊<small>2</small></button>
+          <button data-g="2" class="good">认识<small>3</small></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-stats" class="panel" hidden>
+      <div class="stat-grid">
+        <div class="stat"><b id="sToday">0:00</b><span>今日时长</span></div>
+        <div class="stat"><b id="sTotal">0:00</b><span>累计时长</span></div>
+        <div class="stat"><b id="sCount">0</b><span>今日次数</span></div>
+        <div class="stat"><b id="sAcc">0%</b><span>总正确率</span></div>
+        <div class="stat"><b id="sLearned">0</b><span>已学词数</span></div>
+        <div class="stat"><b id="sWrong">0</b><span>错题数</span></div>
+      </div>
+      <h3>最近 7 天（学习时长）</h3>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <section id="tab-wrong" class="panel" hidden>
+      <h3>错题本</h3>
+      <div id="wrongList"></div>
+    </section>
+
+    <section id="tab-settings" class="panel" hidden>
+      <h3>导入单词</h3>
+      <div class="box">
+        <div class="row">
+          <input type="file" id="filePdf" accept=".pdf,application/pdf">
+          <button id="btnParse">解析 PDF</button>
+        </div>
+        <textarea id="importText" rows="7" placeholder="每行一个词条：word  释义&#10;例如：&#10;abandon /əˈbændən/ 放弃；抛弃&#10;ability 能力"></textarea>
+        <button id="btnImportText" class="primary">导入这些单词</button>
+        <div class="tiny">PDF 解析为尽力而为，请检查文本后再导入。也可以直接把「单词 释义」粘贴进来。</div>
+      </div>
+
+      <h3>云端同步（Gist）</h3>
+      <div class="box">
+        <div class="gist-status" id="gistStatus">未配置云端同步</div>
+        <div class="row">
+          <input type="text" id="setGistId" placeholder="Gist ID">
+        </div>
+        <div class="row">
+          <input type="password" id="setGistToken" placeholder="GitHub Token（仅 gist 权限）">
+        </div>
+        <div class="row">
+          <button id="btnGistSave">保存并测试</button>
+          <button id="btnGistRefresh">从云端刷新</button>
+          <button id="btnGistClear" class="danger">断开同步</button>
+        </div>
+        <div class="tiny">使用公开 Gist 存放加密数据，Token 只存本机。多设备填同一个 Gist ID 和各自生成的 Token 即可同步，但必须使用同一个密码。</div>
+      </div>
+
+      <h3>背景图</h3>
+      <div class="box">
+        <div class="row">
+          <input type="file" id="fileBg" accept="image/*">
+        </div>
+        <div class="row">
+          <input type="text" id="bgUrl" placeholder="或填仓库里的路径，如 bg.jpg / https://...">
+          <button id="btnBgUrl">使用</button>
+          <button id="btnBgClear">清除</button>
+        </div>
+      </div>
+
+      <h3>学习歌单</h3>
+      <div class="box">
+        <div id="plEditor"></div>
+        <button id="btnAddPl">+ 添加歌单</button>
+        <div class="tiny">B 站收藏夹页面无法被网页嵌入，点歌单会新开标签页播放。若想站内内嵌播放，请填单个视频的 BV 号（如 BV1xx411c7mD）。</div>
+      </div>
+
+      <h3>数据与安全</h3>
+      <div class="box">
+        <div class="row">
+          <button id="btnChangePw">修改密码</button>
+          <button id="btnExport">导出加密备份</button>
+          <button id="btnImport">导入备份</button>
+        </div>
+        <div class="row">
+          <button id="btnReset" class="danger">清空全部数据</button>
+        </div>
+        <input type="file" id="fileImport" accept=".json" hidden>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ================= 音乐弹窗 ================= -->
+<div id="musicModal" class="modal" hidden>
+  <div class="modal-box">
+    <h3>🎵 选择歌单</h3>
+    <div id="playlistList"></div>
+    <div id="miniPlayer" hidden>
+      <iframe id="biliFrame" allow="autoplay; encrypted-media; fullscreen" frameborder="0" scrolling="no"></iframe>
+    </div>
+    <button class="close" id="btnCloseMusic">关闭</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+/* =========================================================
+   工具函数
+========================================================= */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const enc = new TextEncoder(), dec = new TextDecoder();
+const STORE_KEY = 'vw_vault_v1';
+const GIST_CONFIG_KEY = 'vw_gist_config';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function bufToB64(buf){
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+const b64ToBuf = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+function todayKey(d = new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtHMS(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+           : `${m}:${String(s).padStart(2,'0')}`;
+}
+let toastTimer;
+function toast(msg){
+  let el = $('#toast');
+  if (!el){ el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
+}
+
+/* =========================================================
+   Gist 同步层
+========================================================= */
+const GIST_API = 'https://api.github.com/gists/';
+
+function getGistConfig(){
+  try {
+    const c = JSON.parse(localStorage.getItem(GIST_CONFIG_KEY));
+    return (c && c.id && c.token) ? c : null;
+  } catch { return null; }
+}
+function saveGistConfig(id, token){
+  localStorage.setItem(GIST_CONFIG_KEY, JSON.stringify({ id: id.trim(), token: token.trim() }));
+}
+function clearGistConfig(){
+  localStorage.removeItem(GIST_CONFIG_KEY);
+}
+
+async function fetchGistVault(cfg){
+  if (!cfg) return null;
+  const res = await fetch(GIST_API + cfg.id + '?_=' + Date.now(), {
+    headers: {
+      'Authorization': 'Bearer ' + cfg.token,
+      'Accept': 'application/vnd.github+json'
+    },
+    cache: 'no-store'
+  });
+  if (res.status === 404) throw new Error('Gist 不存在或 Token 无权限');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const gist = await res.json();
+  const file = gist.files && gist.files['vw_data.json'];
+  if (!file || !file.content) return null;
+  try {
+    const p = JSON.parse(file.content);
+    if (!p || !p.salt || !p.iv || !p.ct) return null;
+    return p;
+  } catch { return null; }
+}
+
+async function pushGistVault(cfg, payload){
+  if (!cfg) return;
+  const res = await fetch(GIST_API + cfg.id, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': 'Bearer ' + cfg.token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      files: { 'vw_data.json': { content: JSON.stringify(payload) } }
+    })
+  });
+  if (!res.ok){
+    const t = await res.text().catch(() => '');
+    throw new Error('Gist 写入失败 ' + res.status + ' ' + t.slice(0, 120));
+  }
+}
+
+/* Gist 推送防抖，避免频繁触发 rate limit */
+let gistPushTimer = null, pendingPush = null;
+function scheduleGistPush(cfg, payload){
+  pendingPush = { cfg, payload };
+  clearTimeout(gistPushTimer);
+  gistPushTimer = setTimeout(() => {
+    if (!pendingPush) return;
+    const { cfg: c, payload: p } = pendingPush;
+    pendingPush = null;
+    pushGistVault(c, p).catch(e => {
+      console.warn('Gist 推送失败', e);
+      toast('云端同步失败：' + e.message);
+    });
+  }, 3000);
+}
+
+/* =========================================================
+   加密存储
+========================================================= */
+let state = null, cryptoKey = null, saltB64 = '';
+
+async function deriveKey(pw, salt){
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+function getLocalPayload(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!p || !p.salt || !p.iv || !p.ct) return null;
+    return p;
+  } catch { return null; }
+}
+
+async function tryDecryptPayload(payload, pw){
+  if (!payload) return 'bad';
+  saltB64 = payload.salt;
+  let key;
+  try { key = await deriveKey(pw, b64ToBuf(payload.salt)); }
+  catch { return 'bad'; }
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBuf(payload.iv) }, key, b64ToBuf(payload.ct));
+    state = normalize(JSON.parse(dec.decode(pt)));
+    cryptoKey = key;
+    return 'ok';
+  } catch { return 'bad'; }
+}
+
+async function saveNow(){
+  if (!cryptoKey || !state) return;
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, enc.encode(JSON.stringify(state)));
+    const payload = { v: 1, salt: saltB64, iv: bufToB64(iv), ct: bufToB64(ct), ts: Date.now() };
+
+    // 本地立即写，保证离线不丢
+    localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+
+    // Gist 异步防抖推送
+    const cfg = getGistConfig();
+    if (cfg) scheduleGistPush(cfg, payload);
+  } catch (e) {
+    console.warn(e);
+    toast('保存失败：浏览器存储空间可能已满');
+  }
+}
+let saveTimer = null;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 700);
+}
+
+async function createVault(pw){
+  saltB64 = bufToB64(crypto.getRandomValues(new Uint8Array(16)));
+  cryptoKey = await deriveKey(pw, b64ToBuf(saltB64));
+  state = defaultState();
+  await saveNow();
+}
+
+/* =========================================================
+   数据结构
+========================================================= */
+function defaultState(){
+  return {
+    v: 1,
+    createdAt: Date.now(),
+    words: [],
+    prog: {},
+    daily: {},
+    wrong: {},
+    settings: {
+      playlists: [{ name: '我的收藏夹', url: '', bvid: '' }],
+      bg: '',
+      dailyGoal: 30
+    }
+  };
+}
+
+function normalize(raw){
+  const s = raw || {};
+  const d = defaultState();
+  const out = {
+    v: 1,
+    createdAt: s.createdAt || Date.now(),
+    words: Array.isArray(s.words) ? s.words : [],
+    prog: (s.prog && typeof s.prog === 'object') ? s.prog : {},
+    daily: (s.daily && typeof s.daily === 'object') ? s.daily : {},
+    wrong: (s.wrong && typeof s.wrong === 'object') ? s.wrong : {},
+    settings: Object.assign({}, d.settings, s.settings || {})
+  };
+  if (!Array.isArray(out.settings.playlists) || !out.settings.playlists.length){
+    out.settings.playlists = d.settings.playlists;
+  }
+  return out;
+}
+
+/* =========================================================
+   启动 / 门禁
+========================================================= */
+function bootGate(){
+  const hasLocal = !!getLocalPayload();
+  const hint = $('#gateHint'), pw2 = $('#pw2'), gistToggle = $('#gistToggle'),
+        gistPanel = $('#gistPanel');
+
+  if (!window.crypto || !crypto.subtle){
+    hint.innerHTML = '⚠️ 当前环境不支持加密 API<br><small>请通过 https（如 GitHub Pages）或 localhost 打开</small>';
+    $('#gateBtn').disabled = true;
+    return;
+  }
+
+  if (hasLocal){
+    hint.innerHTML = '输入密码解锁你的数据';
+    pw2.hidden = true;
+  } else {
+    hint.innerHTML = '首次使用或新设备<br><small>可先填下方云端同步信息再进入</small>';
+    pw2.hidden = false;
+  }
+
+  // 预填充已保存的 Gist 配置
+  const existing = getGistConfig();
+  if (existing){
+    $('#gistId').value = existing.id;
+    $('#gistToken').value = existing.token;
+    gistPanel.hidden = false;
+  }
+
+  gistToggle.onclick = () => { gistPanel.hidden = !gistPanel.hidden; };
+
+  $('#gateBtn').onclick = handleEnter;
+
+  $('#pw1').addEventListener('keydown', e => { if (e.key === 'Enter') handleEnter(); });
+  $('#pw2').addEventListener('keydown', e => { if (e.key === 'Enter') handleEnter(); });
+}
+
+function gateMsg(t){
+  $('#gateMsg').textContent = t;
+}
+
+async function handleEnter(){
+  const msg = $('#gateMsg');
+  msg.textContent = '';
+  const pw = $('#pw1').value;
+
+  // 读取门禁页填写的 Gist 配置（若填了就保存）
+  const gi = $('#gistId').value.trim();
+  const gt = $('#gistToken').value.trim();
+  if (gi && gt) saveGistConfig(gi, gt);
+  const cfg = getGistConfig();
+
+  const hasLocal = !!getLocalPayload();
+  const isNew = !hasLocal;
+
+  if (isNew){
+    if (pw.length < 4) return gateMsg('密码至少 4 位');
+    if (pw !== $('#pw2').value) return gateMsg('两次输入不一致');
+  } else if (!pw){
+    return gateMsg('请输入密码');
+  }
+
+  $('#gateBtn').disabled = true;
+
+  // 优先从 Gist 拉取
+  let gistPayload = null, gistError = null;
+  if (cfg){
+    try { gistPayload = await fetchGistVault(cfg); }
+    catch (e) { gistError = e.message; }
+  }
+
+  const localPayload = getLocalPayload();
+  const payload = gistPayload || localPayload;
+
+  // 没有可用数据 → 全新创建
+  if (!payload){
+    if (cfg && gistError){
+      gateMsg('无法读取云端数据：' + gistError + '，请检查网络或 Token');
+      $('#gateBtn').disabled = false;
+      return;
+    }
+    if (!isNew){
+      gateMsg('本地数据损坏，无法读取');
+      $('#gateBtn').disabled = false;
+      return;
+    }
+    try {
+      await createVault(pw);
+      enterApp('new');
+    } catch (e){
+      gateMsg('初始化失败：' + e.message);
+      $('#gateBtn').disabled = false;
+    }
+    return;
+  }
+
+  // 有数据 → 解锁
+  const r = await tryDecryptPayload(payload, pw);
+  if (r !== 'ok'){
+    gateMsg(gistPayload ? '密码错误（云端数据）' : '密码错误');
+    $('#gateBtn').disabled = false;
+    return;
+  }
+  enterApp(gistPayload ? 'gist' : 'local');
+}
+
+function enterApp(source){
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+  applyBg();
+  renderAll();
+  startTimer();
+  if (source === 'gist') toast('已从云端同步最新数据');
+}
+
+/* =========================================================
+   计时器
+========================================================= */
+let timerStarted = false, tickCount = 0;
+function startTimer(){
+  if (timerStarted) return;
+  timerStarted = true;
+  setInterval(() => {
+    if (document.hidden || !cryptoKey || !state) return;
+    const d = todayKey();
+    const day = state.daily[d] || (state.daily[d] = { sec:0, n:0, ok:0, bad:0, meh:0 });
+    day.sec = (day.sec || 0) + 1;
+    renderTimer();
+    if (++tickCount % 15 === 0){ scheduleSave(); if (!$('#tab-stats').hidden) renderStats(); }
+  }, 1000);
+}
+
+function renderTimer(){
+  if (!state) return;
+  const d = todayKey();
+  $('#tToday').textContent = fmtHMS((state.daily[d] && state.daily[d].sec) || 0);
+  let total = 0;
+  for (const k in state.daily) total += state.daily[k].sec || 0;
+  $('#tTotal').textContent = fmtHMS(total);
+}
+
+/* =========================================================
+   学习逻辑
+========================================================= */
+const INTERVALS = [20, 300, 1800, 7200, 86400, 3*86400, 7*86400, 21*86400];
+let cur = null, revealed = false, combo = 0;
+
+function pickWord(){
+  const words = state.words;
+  if (!words.length) return null;
+  const now = Date.now();
+  let pool = words.filter(w => {
+    const p = state.prog[w.id];
+    return !p || !p.due || p.due <= now;
+  });
+  if (!pool.length) pool = words;
+
+  let best = null, bestScore = -Infinity;
+  for (const w of pool){
+    const p = state.prog[w.id] || { n:0, ok:0, bad:0 };
+    let s = Math.random() * 0.8;
+    if (!p.n) s += 3;
+    s += (state.wrong[w.id] || 0) * 1.6;
+    s -= (p.ok || 0) * 0.08;
+    if (s > bestScore){ bestScore = s; best = w; }
+  }
+  return best;
+}
+
+function renderStudy(){
+  const cardEl = $('#card'), revealBtn = $('#btnReveal'), gradeRow = $('#gradeRow');
+
+  if (!state.words.length){
+    cardEl.innerHTML = '<div class="empty">还没有单词 🥲<br><small>去「设置」里导入 PDF 或粘贴词表</small></div>';
+    revealBtn.hidden = true; gradeRow.hidden = true;
+    $('#goalBar').style.width = '0%';
+    $('#goalText').textContent = '0 / ' + (state.settings.dailyGoal || 30);
+    return;
+  }
+
+  if (!cur) { cur = pickWord(); revealed = false; }
+  if (!cur){ cur = state.words[0]; revealed = false; }
+
+  cardEl.innerHTML =
+    `<div class="combo">${combo > 1 ? '🔥 连对 ' + combo : ''}</div>
+     <div class="word">${esc(cur.w)}</div>
+     ${cur.ph ? `<div class="phon">/${esc(cur.ph)}/</div>` : ''}
+     <div class="meaning ${revealed ? '' : 'blur'}">${revealed ? esc(cur.m) : '点击「显示释义」查看'}</div>`;
+
+  revealBtn.hidden = revealed;
+  gradeRow.hidden = !revealed;
+
+  const d = todayKey();
+  const day = state.daily[d] || { n: 0 };
+  const goal = state.settings.dailyGoal || 30;
+  $('#goalBar').style.width = Math.min(100, Math.round((day.n || 0) / goal * 100)) + '%';
+  $('#goalText').textContent = `${day.n || 0} / ${goal}`;
+}
+
+function grade(g){
+  if (!cur) return;
+  const now = Date.now(), id = cur.id, d = todayKey();
+  const p = state.prog[id] || (state.prog[id] = { n:0, ok:0, bad:0, box:0, due:0, last:0 });
+  const day = state.daily[d] || (state.daily[d] = { sec:0, n:0, ok:0, bad:0, meh:0 });
+
+  p.n++; p.last = now; day.n = (day.n || 0) + 1;
+
+  if (g === 2){
+    p.ok++; p.box = Math.min(p.box + 1, 7); day.ok = (day.ok || 0) + 1;
+    combo++;
+    delete state.wrong[id];
+  } else if (g === 1){
+    p.box = Math.max(1, p.box); day.meh = (day.meh || 0) + 1;
+    combo = 0;
+  } else {
+    p.bad++; p.box = 0; day.bad = (day.bad || 0) + 1;
+    combo = 0;
+    state.wrong[id] = (state.wrong[id] || 0) + 1;
+  }
+
+  const base = INTERVALS[Math.min(p.box, 7)];
+  p.due = now + base * 1000 * (g === 1 ? 0.4 : 1);
+
+  const el = $('#card');
+  el.classList.add(g === 2 ? 'flash-ok' : g === 0 ? 'flash-bad' : 'flash-mid');
+  setTimeout(() => {
+    el.classList.remove('flash-ok', 'flash-bad', 'flash-mid');
+    cur = null; revealed = false;
+    renderStudy();
+  }, 170);
+
+  scheduleSave();
+  renderTimer();
+}
+
+/* =========================================================
+   统计
+========================================================= */
+function renderStats(){
+  const days = state.daily;
+  let totalSec = 0, totalN = 0, totalOk = 0;
+  for (const k in days){
+    totalSec += days[k].sec || 0;
+    totalN   += days[k].n   || 0;
+    totalOk  += days[k].ok  || 0;
+  }
+  const today = days[todayKey()] || { sec:0, n:0 };
+  const acc = totalN ? Math.round(totalOk / totalN * 100) : 0;
+
+  $('#sToday').textContent   = fmtHMS(today.sec || 0);
+  $('#sTotal').textContent   = fmtHMS(totalSec);
+  $('#sCount').textContent   = today.n || 0;
+  $('#sAcc').textContent     = acc + '%';
+  $('#sLearned').textContent = Object.keys(state.prog).length;
+  $('#sWrong').textContent   = Object.keys(state.wrong).length;
+
+  const arr = [];
+  for (let i = 6; i >= 0; i--){
+    const dt = new Date(); dt.setDate(dt.getDate() - i);
+    const k = todayKey(dt);
+    arr.push({ label: `${dt.getMonth()+1}/${dt.getDate()}`, v: (days[k] && days[k].sec) || 0 });
+  }
+  const max = Math.max(...arr.map(a => a.v), 60);
+  $('#chart').innerHTML = arr.map(a => `
+    <div class="col">
+      <em>${a.v ? Math.round(a.v/60) + 'm' : ''}</em>
+      <i style="height:${Math.max(3, a.v / max * 100)}%"></i>
+      <span>${a.label}</span>
+    </div>`).join('');
+}
+
+/* =========================================================
+   错题本
+========================================================= */
+function renderWrong(){
+  const box = $('#wrongList');
+  const ids = Object.keys(state.wrong).sort((a, b) => state.wrong[b] - state.wrong[a]);
+  if (!ids.length){
+    box.innerHTML = '<div class="empty">🎉 错题本是空的，继续保持！</div>';
+    return;
+  }
+  box.innerHTML = ids.map(id => {
+    const w = state.words.find(x => x.id === id) || { w: id, m: '（词库中已不存在）' };
+    return `<div class="wrow">
+      <div class="winfo"><b>${esc(w.w)}</b><span>${esc(w.m)}</span></div>
+      <div class="wops"><em>×${state.wrong[id]}</em>
+        <button data-id="${esc(id)}">移出</button></div>
+    </div>`;
+  }).join('');
+
+  $$('#wrongList button').forEach(b => {
+    b.onclick = () => {
+      delete state.wrong[b.dataset.id];
+      saveNow(); renderWrong(); renderStats();
+    };
+  });
+}
+
+/* =========================================================
+   设置：歌单 / 背景 / 导入 / Gist
+========================================================= */
+function renderSettings(){
+  const box = $('#plEditor');
+  box.innerHTML = '';
+  state.settings.playlists.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'pl-row';
+    row.innerHTML = `
+      <input class="pl-name" placeholder="歌单名" value="${esc(p.name || '')}">
+      <input class="pl-url"  placeholder="B站收藏夹链接" value="${esc(p.url || '')}">
+      <input class="pl-bv"   placeholder="BV号(可选)" value="${esc(p.bvid || '')}">
+      <button class="pl-del">删除</button>`;
+    row.querySelector('.pl-name').oninput = e => { p.name = e.target.value; scheduleSave(); };
+    row.querySelector('.pl-url').oninput  = e => { p.url  = e.target.value; scheduleSave(); };
+    row.querySelector('.pl-bv').oninput   = e => { p.bvid = e.target.value.trim(); scheduleSave(); };
+    row.querySelector('.pl-del').onclick  = () => {
+      state.settings.playlists.splice(i, 1);
+      if (!state.settings.playlists.length) state.settings.playlists.push({ name:'我的收藏夹', url:'', bvid:'' });
+      saveNow(); renderSettings();
+    };
+    box.appendChild(row);
+  });
+  $('#bgUrl').value = (state.settings.bg && !state.settings.bg.startsWith('data:')) ? state.settings.bg : '';
+  renderGistStatus();
+}
+
+function renderGistStatus(){
+  const cfg = getGistConfig();
+  const el = $('#gistStatus');
+  if (!el) return;
+  if (cfg){
+    el.innerHTML = `✅ 已配置：Gist ID <code>${esc(cfg.id.slice(0,8))}…</code>`;
+    $('#setGistId').value = cfg.id;
+    $('#setGistToken').value = cfg.token;
+  } else {
+    el.textContent = '未配置云端同步';
+    $('#setGistId').value = '';
+    $('#setGistToken').value = '';
+  }
+}
+
+function applyBg(){
+  const layer = $('#bgLayer');
+  const bg = state && state.settings.bg;
+  layer.style.backgroundImage = bg ? `url("${bg}")` : '';
+}
+
+async function readImageCompressed(file){
+  const dataUrl = await new Promise(res => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+  });
+  const MAXW = 1920;
+  if (img.width <= MAXW && dataUrl.length < 900000) return dataUrl;
+  const scale = Math.min(1, MAXW / img.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+/* ---------- PDF 解析 ---------- */
+function itemsToText(items){
+  const rows = [];
+  let curRow = null;
+  for (const it of items){
+    if (!it.str || !it.str.trim()) continue;
+    const y = it.transform[5], x = it.transform[4];
+    if (curRow && Math.abs(curRow.y - y) < 3.5){
+      curRow.parts.push({ x, s: it.str });
+    } else {
+      if (curRow) rows.push(curRow);
+      curRow = { y, parts: [{ x, s: it.str }] };
+    }
+  }
+  if (curRow) rows.push(curRow);
+  return rows.map(r => r.parts.sort((a, b) => a.x - b.x).map(p => p.s).join(' ')).join('\n');
+}
+
+async function pdfToText(file){
+  if (!window.pdfjsLib) throw new Error('PDF 解析库未加载，请检查网络');
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  const data = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const out = [];
+  for (let i = 1; i <= pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    out.push(itemsToText(tc.items));
+  }
+  return out.join('\n');
+}
+
+/* ---------- 文本 → 词条 ---------- */
+function parseWordLines(text){
+  const out = [], seen = new Set();
+  const POS = /^((?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|int|aux|abbr|phr)\s*\.?\s*)+/i;
+
+  for (let raw of String(text).split(/\r?\n/)){
+    let line = raw.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!line) continue;
+    if (/^\d{1,4}$/.test(line)) continue;
+    if (!/^[A-Za-z]/.test(line)) continue;
+
+    const m = line.match(/^([A-Za-z][A-Za-z'’\-]*(?: [A-Za-z][A-Za-z'’\-]*){0,2}) (.+)$/);
+    if (!m) continue;
+
+    let w = m[1].trim();
+    let rest = m[2].trim();
+
+    let ph = '';
+    const pm = rest.match(/^[\/\[]([^\/\]]{1,60})[\/\]]\s*/);
+    if (pm){ ph = pm[1].trim(); rest = rest.slice(pm[0].length); }
+
+    rest = rest.replace(POS, '').replace(/^[：:\-–—\s|]+/, '').trim();
+    if (!rest) continue;
+
+    const key = w.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: key, w, ph, m: rest });
+  }
+  return out;
+}
+
+/* =========================================================
+   音乐
+========================================================= */
+function renderPlaylistList(){
+  const box = $('#playlistList');
+  box.innerHTML = '';
+  state.settings.playlists.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'pl-item';
+    btn.innerHTML = `<span>${esc(p.name || '未命名歌单')}</span>
+      <small>${p.bvid ? '内嵌播放' : (p.url ? '新标签打开' : '未设置')}</small>`;
+    btn.onclick = () => playPlaylist(i);
+    box.appendChild(btn);
+  });
+}
+
+function playPlaylist(i){
+  const p = state.settings.playlists[i];
+  if (!p) return;
+  if (p.bvid){
+    const wrap = $('#miniPlayer'), frame = $('#biliFrame');
+    wrap.hidden = false;
+    frame.src = 'about:blank';
+    setTimeout(() => {
+      frame.src = `//player.bilibili.com/player.html?bvid=${encodeURIComponent(p.bvid)}&page=1&autoplay=1&danmaku=0&high_quality=1`;
+    }, 60);
+  } else if (p.url){
+    window.open(p.url, '_blank', 'noopener');
+  } else {
+    toast('这个歌单还没设置链接，去「设置」里填一下');
+  }
+}
+
+/* =========================================================
+   渲染总控
+========================================================= */
+function renderAll(){
+  renderTimer();
+  renderStudy();
+  renderStats();
+  renderWrong();
+  renderSettings();
+  renderPlaylistList();
+}
+
+/* =========================================================
+   事件绑定
+========================================================= */
+function bindEvents(){
+  $$('.tabs button').forEach(b => {
+    b.onclick = () => {
+      $$('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+      ['study','stats','wrong','settings'].forEach(t => {
+        $('#tab-' + t).hidden = (t !== b.dataset.tab);
+      });
+      if (b.dataset.tab === 'stats') renderStats();
+      if (b.dataset.tab === 'wrong') renderWrong();
+      if (b.dataset.tab === 'settings') renderSettings();
+    };
+  });
+
+  // 学习
+  $('#btnReveal').onclick = () => { revealed = true; renderStudy(); };
+  $('#card').onclick = () => { if (!revealed && state.words.length){ revealed = true; renderStudy(); } };
+  $$('#gradeRow button').forEach(b => b.onclick = () => grade(+b.dataset.g));
+
+  document.addEventListener('keydown', e => {
+    if (!cryptoKey || $('#tab-study').hidden) return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.code === 'Space'){
+      e.preventDefault();
+      if (!revealed && state.words.length){ revealed = true; renderStudy(); }
+    }
+    if (revealed && ['1','2','3'].includes(e.key)) grade(+e.key - 1);
+  });
+
+  // 音乐
+  $('#btnMusic').onclick = () => { renderPlaylistList(); $('#musicModal').hidden = false; };
+  $('#btnCloseMusic').onclick = () => {
+    $('#musicModal').hidden = true;
+    $('#miniPlayer').hidden = true;
+    $('#biliFrame').src = 'about:blank';
+  };
+  $('#musicModal').addEventListener('click', e => {
+    if (e.target.id === 'musicModal') $('#btnCloseMusic').click();
+  });
+
+  // 锁定
+  $('#btnLock').onclick = () => {
+    saveNow();
+    cryptoKey = null; state = null;
+    location.reload();
+  };
+
+  // 歌单
+  $('#btnAddPl').onclick = () => {
+    state.settings.playlists.push({ name: '新歌单', url: '', bvid: '' });
+    saveNow(); renderSettings();
+  };
+
+  // 背景
+  $('#fileBg').onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    toast('处理图片中…');
+    try {
+      const dataUrl = await readImageCompressed(f);
+      state.settings.bg = dataUrl;
+      await saveNow();
+      applyBg();
+      toast('背景已更新');
+    } catch { toast('图片读取失败'); }
+    e.target.value = '';
+  };
+  $('#btnBgUrl').onclick = async () => {
+    const v = $('#bgUrl').value.trim();
+    state.settings.bg = v;
+    await saveNow(); applyBg();
+    toast(v ? '背景已更新' : '已清除背景');
+  };
+  $('#btnBgClear').onclick = async () => {
+    state.settings.bg = '';
+    await saveNow(); applyBg(); $('#bgUrl').value = '';
+    toast('已清除背景');
+  };
+
+  // 导入单词
+  $('#btnParse').onclick = async () => {
+    const f = $('#filePdf').files[0];
+    if (!f) return toast('请先选择一个 PDF 文件');
+    toast('正在解析 PDF…');
+    try {
+      const text = await pdfToText(f);
+      $('#importText').value = text;
+      toast('解析完成，请检查文本格式后导入');
+    } catch (err){
+      console.error(err);
+      toast('解析失败：' + err.message);
+    }
+  };
+
+  $('#btnImportText').onclick = async () => {
+    const raw = $('#importText').value;
+    if (!raw.trim()) return toast('文本框是空的');
+    const arr = parseWordLines(raw);
+    if (!arr.length) return toast('没解析出词条，请按「单词 释义」每行一条');
+
+    const exist = new Set(state.words.map(w => w.id));
+    let added = 0;
+    for (const w of arr){
+      if (!exist.has(w.id)){ state.words.push(w); exist.add(w.id); added++; }
+    }
+    await saveNow();
+    cur = null; revealed = false;
+    renderAll();
+    toast(`导入完成：新增 ${added} 个，共 ${arr.length} 条解析结果`);
+  };
+
+  // Gist 同步：保存并测试
+  $('#btnGistSave').onclick = async () => {
+    const id = $('#setGistId').value.trim();
+    const token = $('#setGistToken').value.trim();
+    if (!id || !token) return toast('请填写 Gist ID 和 Token');
+    saveGistConfig(id, token);
+    const cfg = getGistConfig();
+    try {
+      const payload = await fetchGistVault(cfg);
+      if (payload) toast('连接成功，云端已有数据。如需载入请点「从云端刷新」');
+      else toast('连接成功，云端暂无数据。之后的修改会自动上传');
+    } catch (e){
+      toast('连接失败：' + e.message);
+    }
+    renderGistStatus();
+  };
+
+  // Gist 同步：从云端刷新
+  $('#btnGistRefresh').onclick = async () => {
+    if (!confirm('从云端刷新会覆盖当前本地进度，确定吗？')) return;
+    const cfg = getGistConfig();
+    if (!cfg) return toast('未配置云端同步');
+    try {
+      const payload = await fetchGistVault(cfg);
+      if (!payload) return toast('云端暂无数据');
+      const pt = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: b64ToBuf(payload.iv) },
+        cryptoKey, b64ToBuf(payload.ct)
+      );
+      saltB64 = payload.salt;
+      state = normalize(JSON.parse(dec.decode(pt)));
+      await saveNow();
+      applyBg();
+      renderAll();
+      toast('已从云端刷新');
+    } catch (e){
+      toast('刷新失败：密码不匹配或云端数据损坏');
+    }
+  };
+
+  // Gist 同步：断开
+  $('#btnGistClear').onclick = () => {
+    if (!confirm('断开后本机将不再同步到云端，本地数据保留。确定吗？')) return;
+    clearGistConfig();
+    renderGistStatus();
+    toast('已断开云端同步');
+  };
+
+  // 修改密码
+  $('#btnChangePw').onclick = async () => {
+    const np = prompt('请输入新密码（至少 4 位）：');
+    if (np === null) return;
+    if (np.length < 4) return toast('密码至少 4 位');
+    const np2 = prompt('再输入一次新密码：');
+    if (np !== np2) return toast('两次输入不一致');
+    saltB64 = bufToB64(crypto.getRandomValues(new Uint8Array(16)));
+    cryptoKey = await deriveKey(np, b64ToBuf(saltB64));
+    await saveNow();
+    toast('密码已修改，其他设备需使用新密码同步');
+  };
+
+  // 导出备份
+  $('#btnExport').onclick = () => {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return toast('暂无数据');
+    const blob = new Blob([raw], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `单词本备份_${todayKey()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast('备份已导出（内容仍为加密状态）');
+  };
+
+  // 导入备份
+  $('#btnImport').onclick = () => $('#fileImport').click();
+  $('#fileImport').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const p = JSON.parse(r.result);
+        if (!p.salt || !p.iv || !p.ct) throw new Error('格式不对');
+        if (!confirm('导入将覆盖当前本地数据，确定吗？')) return;
+        localStorage.setItem(STORE_KEY, r.result);
+        location.reload();
+      } catch {
+        toast('这不是有效的备份文件');
+      }
+    };
+    r.readAsText(f);
+    e.target.value = '';
+  };
+
+  // 清空
+  $('#btnReset').onclick = () => {
+    if (!confirm('确定清空本地全部数据？此操作不可恢复！')) return;
+    if (!confirm('再确认一次：真的要删除所有单词和记录吗？（云端不会自动删除）')) return;
+    localStorage.removeItem(STORE_KEY);
+    location.reload();
+  };
+
+  // 切回页面时刷新
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state){
+      renderTimer();
+      if (!$('#tab-stats').hidden) renderStats();
+    }
+  });
+}
+
+/* =========================================================
+   初始化
+========================================================= */
+(function init(){
+  bindEvents();
+  bootGate();
+})();
+</script>
+</body>
+</html>
